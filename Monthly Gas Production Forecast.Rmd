@@ -1,0 +1,392 @@
+---
+title: "Timeseries"
+author: "Jyosmitha"
+date: "8/13/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+#Importing the Library
+library(forecast)
+library(tseries)
+library(xts)
+library(Metrics)
+library(ggplot2)
+#reading the dataset
+data<- forecast::gas
+```
+
+```{r}
+#Structure of the data
+str(data)
+#Summary of entire Series
+summary(data)
+#Checking for null values
+anyNA(data)
+#Checking the cycle/periodicity of the data
+cycle(data)
+#frequency of time series
+frequency(data)
+#View(data)
+```
+
+```{r}
+#head and tail
+head(data)
+tail(data)
+#start and end of time series
+start(data)
+end(data)
+#outliers
+tsoutliers(data)
+```
+
+```{r}
+#plotting time series
+plot(data,main="TimeSeries plot for Australian Gas Production Data",
+     col="blue",
+     xlab="Year",
+     ylab="Gas Production")
+#regression line
+abline(reg=lm(data~time(data)),col='red')
+```
+
+```{r}
+#aggregation
+data_yearly=aggregate(data,nfrequency = 1)
+data_Quarterly=aggregate(data,nfrequency = 4)
+
+#Seasonal Plot
+seasonplot(data,year.labels = TRUE,year.labels.left = TRUE,pch=19,col=1:40,
+           main='Australian Monthly Gas Production-Seasonal Plot')
+#Monthly Plot
+monthplot(data,pch=19,xlab='Month',ylab='Gas Production',
+          main='Australian Monthly Gas Production-Seasonal Plot',col='red')
+#Box plot
+boxplot(data~cycle(data),xlab = 'Month'
+        , ylab = "Production",main="Boxplot for Australian Gas Production")
+
+ggseasonplot(data,polar = TRUE)
+gglagplot(data,main="Lagplot")
+```
+
+
+```{r}
+periodicity(data)
+```
+
+
+```{r}
+#Decomposing the data into trend,seasonality and randomness
+decomAdd=decompose(data,type = "additive")
+plot(decomAdd)
+decomMul=decompose(data,type="multiplicative")
+plot(decomMul)
+
+```
+
+```{r}
+#plotting each of the above
+plot(decomAdd$trend,xlab="Year",main="Trend Chart after Decomposition")
+plot(decomAdd$seasonal,xlab="Year",main="Seasonality Chart after Decomposition")
+plot(decomAdd$random,xlab="Year",main="Random Chart after Decomposition")
+```
+
+```{r}
+#plotting each of the above
+plot(decomMul$trend,xlab="Year",main="Trend Chart after Decomposition")
+plot(decomMul$seasonal,xlab="Year",main="Seasonality Chart after Decomposition")
+plot(decomMul$random,xlab="Year",main="Random Chart after Decomposition")
+```
+
+Subsetting the data
+
+```{r}
+DataAnalysis=window(data,start=1970)
+start(DataAnalysis)
+end(DataAnalysis)
+frequency(DataAnalysis)
+adf.test(DataAnalysis)
+```
+
+
+```{r}
+plot(DataAnalysis,main="Plot of series from Year 1970",col='Blue')
+abline(reg=lm(DataAnalysis~time(DataAnalysis)),col='red')
+
+monthplot(DataAnalysis,main="Month plot of series from Year 1970 ",col='Blue')
+
+boxplot(DataAnalysis~cycle(DataAnalysis),xlab = 'Month'
+        , ylab = "Production",main="Boxplot for Australian Gas Production")
+
+ggseasonplot(DataAnalysis,polar = TRUE)
+gglagplot(DataAnalysis,main="Lagplot")
+
+seasonplot(DataAnalysis,year.labels = TRUE,year.labels.left = TRUE,pch=19,col=1:40,
+           main='Australian Monthly Gas Production-Seasonal Plot')
+
+
+```
+
+```{r}
+decomAdd=decompose(DataAnalysis,type = "additive")
+plot(DataAnalysis)
+decomMul=decompose(DataAnalysis,type="multiplicative")
+plot(decomAdd)
+#plotting each of the above
+plot(decomAdd$trend,xlab="Year",main="Trend Chart after Decomposition")
+plot(decomAdd$seasonal,xlab="Year",main="Seasonality Chart after Decomposition")
+plot(decomAdd$random,xlab="Year",main="Random Chart after Decomposition")
+
+#plotting each of the above
+plot(decomMul$trend,xlab="Year",main="Trend Chart after Decomposition")
+plot(decomMul$seasonal,xlab="Year",main="Seasonality Chart after Decomposition")
+plot(decomMul$random,xlab="Year",main="Random Chart after Decomposition")
+plot(decomMul)
+```
+
+
+Null Hypothesis for ADF is Time series is Non-Stationery 
+Alternate Hypothesis: Time series is sationary
+Rejection of null hypothesis implies that series is stationary
+
+```{r}
+adf.test(DataAnalysis)
+plot(DataAnalysis)
+```
+
+Removing seasonality
+
+```{r}
+decomp = stl(DataAnalysis, s.window = "periodic")
+deseasonal_data=seasadj(decomp)
+plot(decomp)
+plot(DataAnalysis,col='blue',main="Seasonalized vs De-seasonalized plot")
+lines(deseasonal_data,col='red' )
+legend("bottomright", legend=c("Actual", "Deseasonalized"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+```
+
+Removing Trend
+
+```{r}
+count_d1 = diff(deseasonal_data, differences = 1)
+plot(count_d1, main="Differenced plot")
+adf.test(count_d1, alternative = "stationary")
+
+Acf(count_d1, main='ACF for Differenced Series',lag.max = 12)
+Pacf(count_d1, main='PACF for Differenced Series',lag.max = 12)
+```
+
+Splitting the dataset into train and test
+
+```{r}
+dataTrain = window(deseasonal_data,start=1970,end=c(1993,12),frequency=12)
+start(dataTrain)
+end(dataTrain)
+dataTest= window(deseasonal_data, start=1994,frequency=12)
+start(dataTest)
+end(dataTest)
+```
+
+Manually built ARIMA model
+ 
+```{r}
+plot(dataTrain)
+arimaModel = arima(dataTrain, order=c(7,1,6))
+arimaModel
+tsdisplay(residuals(arimaModel),lag.max = 12, main='Model Residuals for Manual ARIMA')
+```
+
+Ljung box test
+H0: Residuals are independent
+Ha: Residuals are not independent
+
+```{r}
+library(stats)
+Box.test(arimaModel$residuals)
+```
+ 
+Forecasting with manual arima for 20 periods
+ 
+```{r}
+fcast <- forecast(arimaModel, h=20,level = c(95))
+plot(fcast)
+```
+
+Prediction with manual arima
+ 
+```{r}
+forecast::accuracy(fcast, dataTest,h=20)
+fcast
+#Actual vs Predicted on train dataset
+pred <- predict(fcast, n.ahead = 20)
+pred
+plot(pred$x,col="blue",main="Actual vs Predicted on train dataset")
+lines(pred$fitted,col='red' )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#Actual vs Predicted on test dataset
+plot(DataAnalysis,col="blue",main="Actual vs Prediction on test Data" )
+lines(fcast$mean,col="red" )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#comparing with test period
+plot(pred$mean,col="blue",main="Forecasted test vs test Data" )
+lines(dataTest,col="red" )
+
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+```
+
+ 
+AUTO ARIMA Model
+
+```{r pressure, echo=FALSE}
+#partitioning seasonalized dataset
+dataTrain1 = window(DataAnalysis,start=1970,end=c(1993,12),frequency=12)
+start(dataTrain)
+end(dataTrain)
+dataTest1= window(DataAnalysis, start=1994,frequency=12)
+```
+
+```{r pressure, echo=FALSE}
+#original trend and series model
+fit1<-auto.arima(dataTrain1 , seasonal=TRUE)
+fit1
+tsdisplay(residuals(fit1), lag.max=12, main='Auto ARIMA Model Residuals')
+#deseasonalized model
+fit2=auto.arima(dataTrain,seasonal = TRUE)
+fit2
+tsdisplay(residuals(fit2), lag.max=12, main='Auto ARIMA Model Residuals')
+```
+
+Ljung box test
+H0: Residuals are independent
+Ha: Residuals are not independent
+
+```{r}
+Box.test(fit1$residuals)
+Box.test(fit2$residuals)
+```
+
+forecasting with auto arima
+
+```{r}
+#original trend and series model
+fcast1 <- forecast(fit1, h=20,level = c(95))
+forecast::accuracy(fcast1,dataTest1)
+plot(fcast1)
+summary(fcast1)
+
+#deseasonalized model
+fcast2 <- forecast(fit2, h=20,level = c(95))
+forecast::accuracy(fcast2,dataTest)
+plot(fcast2)
+summary(fcast2)
+
+
+```
+
+
+Plots of actual vs train and actual vs predicted 
+
+```{r}
+#original trend and series model
+
+#Actual vs Predicted on train dataset
+pred1 <- predict(fcast1, n.ahead = 20)
+pred1
+plot(pred1$x,col="blue",main="Actual vs Predicted on train dataset")
+lines(pred1$fitted,col='red' )
+
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#Actual vs Predicted on test dataset
+plot(DataAnalysis,col="blue",main="Actual vs Prediction on test Data" )
+lines(pred1$mean,col="red" )
+
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#comparing with test period
+plot(dataTest1,col="blue",main="Forecasted test vs test Data" )
+lines(pred1$mean,col="red" )
+
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+```
+
+```{r}
+#deseasonalized series 
+#Actual vs Predicted on train dataset
+pred2 <- predict(fcast2, n.ahead = 20)
+pred1
+plot(pred2$x,col="blue",main="Actual vs Predicted on train dataset")
+lines(pred2$fitted,col='red' )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#Actual vs Predicted on test dataset
+plot(deseasonal_data,col="blue",main="Actual vs Prediction on test Data" )
+lines(pred2$mean,col="red" )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#comparing with test period
+plot(dataTest,col="blue",main="Forecasted test vs test Data" )
+lines(pred2$mean,col="red" )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+```
+
+Manual arima forecast for 20 periods
+```{r}
+f1=forecast(arimaModel,h=20)
+forecast::accuracy(f1, dataTest)
+summary(f1)
+```
+Auto airma forecast
+```{r}
+#original trend and series
+f2=forecast(fit1,h=20)
+forecast::accuracy(f2,dataTest1)
+summary(f2)
+
+```
+
+```{r}
+#deseasonalized
+f3=forecast(fit2,h=20)
+forecast::accuracy(f3,dataTest)
+summary(f3)
+```
+
+Forecasting with 12 months
+
+```{r}
+
+fcast3 <- forecast(fit1, h=12,level = c(95))
+forecast::accuracy(fcast3,dataTest)
+plot(fcast3)
+summary(fcast3)
+
+
+predFinal <- predict(fcast3, n.ahead = 12)
+pred1
+plot(predFinal$x,col="blue",main="Actual vs Predicted on train dataset")
+lines(predFinal$fitted,col='red' )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+#Actual vs Predicted on test dataset
+plot(DataAnalysis,col="blue",main="Actual vs Prediction on test Data" )
+lines(predFinal$mean,col="red" )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+
+#comparing with test period
+plot(dataTest,col="blue",main="Forecasted test vs test Data" )
+lines(predFinal$mean,col="red" )
+legend("bottomright", legend=c("Actual", "Predicted"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+```
+
